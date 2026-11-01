@@ -8,3 +8,8 @@ node_modules
 ansible/inventory.ini
 ansible/group_vars/*/vault.yml
 *.retry
+*.pem
+*.key
+ansible/inventory.ini
+ansible/group_vars/*/vault.yml
+*.retry
