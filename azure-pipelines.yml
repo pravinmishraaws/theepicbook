@@ -34,7 +34,7 @@ pool:
 variables:
   - group: 'Epicbook-mysql-secrets'
   - name: SECURE_KEY_NAME
-    value: 'epicbook-aws-key'
+    value: 'epicbook-key'
 
 stages:
   # ---------------------------------------------------------------------------
