@@ -282,6 +282,15 @@ stages:
               echo "SSH key staged with mode $(stat -c '%a' "$KEY_DIR/id_ed25519"). Contents not shown."
             displayName: "Stage SSH key at a temp path (chmod 600)"
 
+          - script: |
+              sudo apt-get update
+              sudo apt-get install -y rsync
+            displayName: 'Install rsync'
+
+          - script: |
+              ansible-galaxy collection install -r ansible/requirements.yml
+            displayName: 'Install Ansible collections'
+
           # Runs the playbook and keeps only the PLAY RECAP lines for Stage 4.
           # Those lines contain host names and task counts, with no secrets.
           #
