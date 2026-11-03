@@ -99,13 +99,6 @@
     mode: '0644'
   notify: Restart epicbook
 
-- name: Enable and start EpicBook service
-  ansible.builtin.systemd:
-    name: epicbook
-    enabled: true
-    state: started
-    daemon_reload: true
-
 - name: Confirm database can reach MySQL FQDN on port 3306
   ansible.builtin.wait_for:
     host: "{{ mysql_fqdn }}"
@@ -188,3 +181,10 @@
     login_password: "{{ db_admin_password }}"
   when: book_row_check.query_result[0][0].row_count == 0
   no_log: true
+
+- name: Enable and start EpicBook service
+  ansible.builtin.systemd:
+    name: epicbook
+    enabled: true
+    state: started
+    daemon_reload: true
