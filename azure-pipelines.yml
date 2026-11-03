@@ -87,9 +87,9 @@ stages:
               python3 -m venv "$VENV"
               "$VENV/bin/pip" install --quiet --upgrade pip
               "$VENV/bin/pip" install --quiet "$(ansibleCoreSpec)"
-              # The database role depends on community.mysql. It is installed explicitly
-              # rather than relying on a bundled copy from the full "ansible" package.
-              "$VENV/bin/ansible-galaxy" collection install community.mysql
+              # Collections come from ansible/requirements.yml (ansible.posix for the
+              # backend synchronize task, ansible.mysql for the database tasks).
+              "$VENV/bin/ansible-galaxy" collection install -r ansible/requirements.yml
               # Later steps in this job find ansible-playbook on PATH.
               echo "##vso[task.prependpath]$VENV/bin"
               "$VENV/bin/ansible" --version
@@ -151,7 +151,7 @@ stages:
               python3 -m venv "$VENV"
               "$VENV/bin/pip" install --quiet --upgrade pip
               "$VENV/bin/pip" install --quiet "$(ansibleCoreSpec)"
-              "$VENV/bin/ansible-galaxy" collection install community.mysql
+              "$VENV/bin/ansible-galaxy" collection install -r ansible/requirements.yml
               echo "##vso[task.prependpath]$VENV/bin"
               "$VENV/bin/ansible" --version
             displayName: "Install Ansible and community.mysql"
@@ -259,7 +259,7 @@ stages:
               python3 -m venv "$VENV"
               "$VENV/bin/pip" install --quiet --upgrade pip
               "$VENV/bin/pip" install --quiet "$(ansibleCoreSpec)"
-              "$VENV/bin/ansible-galaxy" collection install community.mysql
+              "$VENV/bin/ansible-galaxy" collection install -r ansible/requirements.yml
               echo "##vso[task.prependpath]$VENV/bin"
               "$VENV/bin/ansible-playbook" --version
             displayName: "Install Ansible and community.mysql"
