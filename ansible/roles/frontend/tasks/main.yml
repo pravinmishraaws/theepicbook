@@ -1,0 +1,37 @@
+---
+- name: Install Nginx
+  ansible.builtin.apt:
+    name: nginx
+    state: present
+
+- name: Ensure Nginx is enabled and started
+  ansible.builtin.systemd:
+    name: nginx
+    enabled: true
+    state: started
+
+- name: Remove default Nginx site
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  notify: Reload nginx
+
+- name: Deploy EpicBook Nginx site configuration
+  ansible.builtin.template:
+    src: epicbook.conf.j2
+    dest: /etc/nginx/sites-available/epicbook.conf
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Reload nginx
+
+- name: Enable EpicBook Nginx site
+  ansible.builtin.file:
+    src: /etc/nginx/sites-available/epicbook.conf
+    dest: /etc/nginx/sites-enabled/epicbook.conf
+    state: link
+  notify: Reload nginx
+
+- name: Test Nginx configuration
+  ansible.builtin.command: nginx -t
+  changed_when: false
