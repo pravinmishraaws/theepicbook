@@ -1,0 +1,20 @@
+---
+- name: Configure common baseline on all hosts
+  hosts: all
+  become: true
+  roles:
+    - common
+
+- name: Configure frontend (Nginx)
+  hosts: frontend
+  become: true
+  roles:
+    - frontend
+
+- name: Configure backend (EpicBook + database)
+  hosts: backend
+  become: true
+  roles:
+    - backend
+    - database
+
