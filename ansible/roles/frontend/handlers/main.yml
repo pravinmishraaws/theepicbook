@@ -3,4 +3,3 @@
   ansible.builtin.systemd:
     name: nginx
     state: reloaded
-

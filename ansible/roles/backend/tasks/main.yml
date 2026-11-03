@@ -1,7 +1,12 @@
 ---
 - name: Add NodeSource repository for Node.js
-  ansible.builtin.shell: |
-    curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
+  ansible.builtin.get_url:
+    url: https://deb.nodesource.com/setup_18.x
+    dest: /tmp/nodesource_setup.sh
+    mode: "0755"
+
+- name: Configure NodeSource repository for Node.js
+  ansible.builtin.command: bash /tmp/nodesource_setup.sh
   args:
     creates: /etc/apt/sources.list.d/nodesource.list
 
@@ -13,13 +18,20 @@
     state: present
     update_cache: true
 
+- name: Install rsync on backend
+  ansible.builtin.apt:
+    name: rsync
+    state: present
+    update_cache: true
+  become: true
+
 - name: Create application directory
   ansible.builtin.file:
     path: /opt/epicbook
     state: directory
     owner: ubuntu
     group: ubuntu
-    mode: '0755'
+    mode: "0755"
 
 - name: Deploy EpicBook application code
   ansible.posix.synchronize:
@@ -34,6 +46,7 @@
   ansible.builtin.command: npm ci --production
   args:
     chdir: /opt/epicbook
+    creates: /opt/epicbook/node_modules
 
 - name: Deploy database configuration
   ansible.builtin.template:
@@ -41,7 +54,7 @@
     dest: /opt/epicbook/config/config.json
     owner: ubuntu
     group: ubuntu
-    mode: '0600'
+    mode: "0600"
   no_log: true
   notify: Restart epicbook
 
@@ -51,7 +64,7 @@
     dest: /etc/systemd/system/epicbook.service
     owner: root
     group: root
-    mode: '0644'
+    mode: "0644"
   notify: Restart epicbook
 
 - name: Enable and start EpicBook service
@@ -60,4 +73,3 @@
     enabled: true
     state: started
     daemon_reload: true
-

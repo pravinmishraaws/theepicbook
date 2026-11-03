@@ -26,7 +26,7 @@
       WHERE table_schema = %s AND table_name = 'Author'
     positional_args:
       - "{{ db_name }}"
-  register: author_table_check
+  register: database_author_table_check
   no_log: true
 
 - name: Import schema (only if Author table does not exist)
@@ -37,7 +37,7 @@
     login_host: "{{ mysql_fqdn }}"
     login_user: "{{ db_admin_username }}"
     login_password: "{{ db_admin_password }}"
-  when: author_table_check.query_result[0][0].table_count == 0
+  when: database_author_table_check.query_result[0][0].table_count == 0
   no_log: true
 
 - name: Check if Author seed data already exists
@@ -47,7 +47,7 @@
     login_password: "{{ db_admin_password }}"
     login_db: "{{ db_name }}"
     query: "SELECT COUNT(*) AS row_count FROM Author"
-  register: author_row_check
+  register: database_author_row_check
   no_log: true
 
 - name: Import author seed data (only if Author table is empty)
@@ -58,7 +58,7 @@
     login_host: "{{ mysql_fqdn }}"
     login_user: "{{ db_admin_username }}"
     login_password: "{{ db_admin_password }}"
-  when: author_row_check.query_result[0][0].row_count == 0
+  when: database_author_row_check.query_result[0][0].row_count == 0
   no_log: true
 
 - name: Check if Book seed data already exists
@@ -68,7 +68,7 @@
     login_password: "{{ db_admin_password }}"
     login_db: "{{ db_name }}"
     query: "SELECT COUNT(*) AS row_count FROM Book"
-  register: book_row_check
+  register: database_book_row_check
   no_log: true
 
 - name: Import book seed data (only if Book table is empty)
@@ -79,5 +79,5 @@
     login_host: "{{ mysql_fqdn }}"
     login_user: "{{ db_admin_username }}"
     login_password: "{{ db_admin_password }}"
-  when: book_row_check.query_result[0][0].row_count == 0
+  when: database_book_row_check.query_result[0][0].row_count == 0
   no_log: true

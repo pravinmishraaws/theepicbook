@@ -15,4 +15,3 @@
   ansible.builtin.apt:
     name: python3-pymysql
     state: present
-

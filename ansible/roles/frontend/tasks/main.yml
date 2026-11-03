@@ -22,7 +22,7 @@
     dest: /etc/nginx/sites-available/epicbook.conf
     owner: root
     group: root
-    mode: '0644'
+    mode: "0644"
   notify: Reload nginx
 
 - name: Enable EpicBook Nginx site
@@ -35,4 +35,3 @@
 - name: Test Nginx configuration
   ansible.builtin.command: nginx -t
   changed_when: false
-

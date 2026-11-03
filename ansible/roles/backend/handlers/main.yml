@@ -4,4 +4,3 @@
     name: epicbook
     state: restarted
     daemon_reload: true
-
