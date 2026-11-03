@@ -100,7 +100,7 @@ stages:
             name: sshKey
             displayName: "Download SSH private key (Secure File)"
             inputs:
-              secureFile: "id ed25519" #change this to the name of your Secure File in Pipelines > Library > Secure Files
+              secureFile: "id_ed25519" #change this to the name of your Secure File in Pipelines > Library > Secure Files
 
           # Move the key out of the Secure File download directory into a fresh
           # mktemp directory, then restrict it to 600. Later steps read the path from
