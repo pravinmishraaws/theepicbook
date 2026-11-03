@@ -1,2 +1,3 @@
-
 mysql_fqdn: "epicbook-mysql.c3a8w2cyyvvp.us-west-1.rds.amazonaws.com"
+backend_app_port: 3000
+db_name: "epicbook"

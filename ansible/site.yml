@@ -1,0 +1,11 @@
+- name: Configure common baseline on application server
+  hosts: frontend
+  become: true
+  roles:
+    - common
+
+- name: Configure application and Nginx frontend
+  hosts: frontend
+  become: true
+  roles:
+    - frontend
