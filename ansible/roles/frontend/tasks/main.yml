@@ -72,6 +72,14 @@
   args:
     chdir: /opt/epicbook
 
+- name: Create application config directory
+  ansible.builtin.file:
+    path: /opt/epicbook/config
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: '0755'
+
 - name: Deploy database configuration
   ansible.builtin.template:
     src: db-config.j2
@@ -79,7 +87,7 @@
     owner: ubuntu
     group: ubuntu
     mode: '0600'
-  no_log: true
+  no_log: false   # Change this from true to false
   notify: Restart epicbook
 
 - name: Deploy systemd service unit

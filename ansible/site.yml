@@ -1,11 +1,85 @@
 - name: Configure common baseline on application server
-  hosts: frontend
+  hosts: app_server
   become: true
   roles:
     - common
 
 - name: Configure application and Nginx frontend
-  hosts: frontend
+  hosts: app_server
   become: true
   roles:
     - frontend
+
+- name: Verify EpicBook End-to-End Stack
+  hosts: app_server
+  become: true
+  tasks:
+    - name: Confirm epicbook service is active
+      ansible.builtin.systemd:
+        name: epicbook
+      register: epicbook_status
+      failed_when: epicbook_status.status.ActiveState != "active"
+      *Verification:* Ensures the Node.js backend service is running under systemd.
+
+    - name: Confirm backend port is listening
+      ansible.builtin.wait_for:
+        host: 127.0.0.1
+        port: "{{ backend_app_port }}"
+        timeout: 10
+      *Verification:* Validates that port 3000 is open and bound locally.
+
+    - name: Confirm required tables exist and are populated
+      community.mysql.mysql_query:
+        login_host: "{{ mysql_fqdn }}"
+        login_user: "{{ db_admin_username }}"
+        login_password: "{{ db_admin_password }}"
+        login_db: "{{ db_name }}"
+        query: "SELECT COUNT(*) AS row_count FROM Author"
+      register: verify_author_count
+      no_log: true
+      *Verification:* Queries AWS RDS to check that the Author table has seed rows.
+
+    - name: Fail if Author table is empty
+      ansible.builtin.fail:
+        msg: "Author table has no rows — seed data import may have failed."
+      when: verify_author_count.query_result[0][0].row_count == 0
+
+    - name: Confirm Book table is populated
+      community.mysql.mysql_query:
+        login_host: "{{ mysql_fqdn }}"
+        login_user: "{{ db_admin_username }}"
+        login_password: "{{ db_admin_password }}"
+        login_db: "{{ db_name }}"
+        query: "SELECT COUNT(*) AS row_count FROM Book"
+      register: verify_book_count
+      no_log: true
+      *Verification:* Queries AWS RDS to check that the Book table has seed rows.
+
+    - name: Fail if Book table is empty
+      ansible.builtin.fail:
+        msg: "Book table has no rows — seed data import may have failed."
+      when: verify_book_count.query_result[0][0].row_count == 0
+
+    - name: Confirm Nginx is active
+      ansible.builtin.systemd:
+        name: nginx
+      register: nginx_status
+      failed_when: nginx_status.status.ActiveState != "active"
+      *Verification:* Confirms the Nginx reverse proxy service is running.
+
+    - name: Confirm Nginx configuration is valid
+      ansible.builtin.command: nginx -t
+      changed_when: false
+      *Verification:* Runs the Nginx syntax check command without errors.
+
+    - name: Request the frontend HTTP endpoint
+      ansible.builtin.uri:
+        url: "http://localhost/"
+        status_code: 200
+        timeout: 10
+      register: frontend_response
+      *Verification:* Sends an HTTP GET request to local Nginx to confirm it responds with status 200.
+
+    - name: Report verification success
+      ansible.builtin.debug:
+        msg: "Frontend responded with HTTP {{ frontend_response.status }} — EpicBook is reachable end to end."

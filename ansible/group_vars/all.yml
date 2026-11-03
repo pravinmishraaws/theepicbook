@@ -1,3 +1,10 @@
-mysql_fqdn: "epicbook-mysql.c3a8w2cyyvvp.us-west-1.rds.amazonaws.com"
+---
+# Application settings
+# Ansible Vars File - Ansible variables file (vars.json)
 backend_app_port: 3000
+
+# Database settings
 db_name: "epicbook"
+mysql_fqdn: "epicbook-mysql.c3a8w2cyyvvp.us-west-1.rds.amazonaws.com"
+db_admin_username: "epicbookadmin"
+db_admin_password: "Chinecherem10$"
