@@ -46,7 +46,7 @@ variables:
   # the real group from Pipelines > Library. It must contain:
   #   mysqlAdminUsername : mark as secret
   #   mysqlAdminPassword : mark as secret (so Azure masks it in logs)
-  - group: epicbook-app-secrets
+  - group: Epicbook-mysql-secrets
 
   # Non-secret parameters.
   - name: ansibleCoreSpec
@@ -241,7 +241,7 @@ stages:
     jobs:
       - job: ConfigureAndDeploy
         displayName: "Run site.yml"
-        timeoutInMinutes: 60
+        timeoutInMinutes: "60"
         pool:
           vmImage: ubuntu-latest
         steps:
