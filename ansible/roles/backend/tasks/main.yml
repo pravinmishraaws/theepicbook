@@ -38,6 +38,7 @@
     src: "{{ playbook_dir }}/../"
     dest: /opt/epicbook/
     archive: true
+    use_ssh_args: true
     compress: true
     rsync_opts:
       - "--exclude=.git"
