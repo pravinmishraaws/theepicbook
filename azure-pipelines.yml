@@ -192,6 +192,34 @@ stages:
               ansible-playbook "$(ansiblePlaybook)" -i "$(ansibleInventory)" --syntax-check
             displayName: "Validate playbook syntax (--syntax-check)"
 
+          # Pins the SSH host keys of every inventory host on this agent before Ansible
+          # connects. Ansible's ANSIBLE_HOST_KEY_CHECKING=False does not reach the
+          # ProxyJump child ssh process, so without this the bastion hop stops at a host
+          # key prompt that cannot be answered in a pipeline ("Connection closed by
+          # UNKNOWN port 65535"). accept-new trusts a key on first contact and rejects
+          # a changed key afterwards. The bastion is pinned first, because the
+          # backend_server jump needs its key already on file.
+          - script: |
+              set -euo pipefail
+              mkdir -p "$HOME/.ssh" && chmod 700 "$HOME/.ssh"
+              SSH_OPTS=(-i "$(SSH_KEY_PATH)" -o StrictHostKeyChecking=accept-new -o BatchMode=yes -o ConnectTimeout=20)
+              INV="$(ansibleInventory)"
+
+              BASTION_IP="$(awk '$1 == "bastion-host" { for (i = 1; i <= NF; i++) if ($i ~ /^ansible_host=/) { sub(/^ansible_host=/, "", $i); print $i } }' "$INV")"
+              [ -n "$BASTION_IP" ] || { echo "##[error]bastion-host ansible_host not found in inventory."; exit 1; }
+              ssh "${SSH_OPTS[@]}" "ubuntu@$BASTION_IP" true
+
+              while read -r name ip; do
+                if [ "$name" = "backend_server" ]; then
+                  # Reached through the bastion, as set in the inventory's ansible_ssh_common_args.
+                  ssh "${SSH_OPTS[@]}" -J "ubuntu@$BASTION_IP" "ubuntu@$ip" true
+                else
+                  ssh "${SSH_OPTS[@]}" "ubuntu@$ip" true
+                fi
+                echo "Host key pinned for $name."
+              done < <(awk '/ansible_host=/ { for (i = 1; i <= NF; i++) if ($i ~ /^ansible_host=/) { sub(/^ansible_host=/, "", $i); print $1, $i } }' "$INV")
+            displayName: "Pin SSH host keys (bastion first, then the rest)"
+
           # Real SSH connectivity test to every host in the inventory. This is a hard
           # gate: any unreachable or failed host fails the stage.
           #
@@ -295,6 +323,28 @@ stages:
           - script: |
               ansible-galaxy collection install -r ansible/requirements.yml
             displayName: 'Install Ansible collections'
+
+          # Same host-key pinning as the Validate stage. This job is a fresh agent, so
+          # the known_hosts entries from Validate do not exist here.
+          - script: |
+              set -euo pipefail
+              mkdir -p "$HOME/.ssh" && chmod 700 "$HOME/.ssh"
+              SSH_OPTS=(-i "$(SSH_KEY_PATH)" -o StrictHostKeyChecking=accept-new -o BatchMode=yes -o ConnectTimeout=20)
+              INV="$(ansibleInventory)"
+
+              BASTION_IP="$(awk '$1 == "bastion-host" { for (i = 1; i <= NF; i++) if ($i ~ /^ansible_host=/) { sub(/^ansible_host=/, "", $i); print $i } }' "$INV")"
+              [ -n "$BASTION_IP" ] || { echo "##[error]bastion-host ansible_host not found in inventory."; exit 1; }
+              ssh "${SSH_OPTS[@]}" "ubuntu@$BASTION_IP" true
+
+              while read -r name ip; do
+                if [ "$name" = "backend_server" ]; then
+                  ssh "${SSH_OPTS[@]}" -J "ubuntu@$BASTION_IP" "ubuntu@$ip" true
+                else
+                  ssh "${SSH_OPTS[@]}" "ubuntu@$ip" true
+                fi
+                echo "Host key pinned for $name."
+              done < <(awk '/ansible_host=/ { for (i = 1; i <= NF; i++) if ($i ~ /^ansible_host=/) { sub(/^ansible_host=/, "", $i); print $1, $i } }' "$INV")
+            displayName: "Pin SSH host keys (bastion first, then the rest)"
 
           # Runs the playbook and keeps only the PLAY RECAP lines for Stage 4.
           # Those lines contain host names and task counts, with no secrets.
