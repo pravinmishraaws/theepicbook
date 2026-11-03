@@ -1,19 +1,468 @@
-# Starter pipeline
-# Start with a minimal pipeline that you can customize to build and deploy your code.
-# Add steps that build, run tests, deploy, and more:
-# https://aka.ms/yaml
+# Azure DevOps pipeline: configures the EpicBook EC2 hosts with the Ansible roles in
+# ansible/ and deploys the application.
+#
+# Stages: Prepare -> Validate -> ConfigureAndDeploy -> Verify
+#
+# Every job runs on a fresh Microsoft-hosted agent with no shared filesystem. Each
+# job therefore:
+#   - reinstalls Ansible and the community.mysql collection (a previous job's venv
+#     and galaxy collections are not visible),
+#   - re-checks-out the repo,
+#   - re-downloads the SSH key from Secure Files and stages it at a temp path.
+# The only thing passed between stages is the play-recap artifact: the PLAY RECAP
+# lines from the Configure stage, which Verify parses.
+#
+# Secrets: the MySQL admin credentials come from a variable group. They are mapped
+# into env vars for the one step that needs them, written to a 600-mode JSON file
+# for Ansible, and deleted on exit. They are never echoed and never placed on a
+# command line.
+#
+# No Marketplace extension tasks are used. The only built-in tasks are checkout,
+# DownloadSecureFile@1, PublishPipelineArtifact@1 and download.
 
 trigger:
-- main
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - ansible/*
+      - server.js
+      - package.json
+      - package-lock.json
+      - routes/*
+      - models/*
+      - views/*
+      - public/*
+      - config/*
+      - db/*
+      - azure-pipelines.yml
 
-pool:
-  vmImage: ubuntu-latest
+# No pull-request validation runs. This pipeline is for commits to main only.
+pr: none
 
-steps:
-- script: echo Hello, world!
-  displayName: 'Run a one-line script'
+variables:
+  # Variable group with the MySQL admin secrets. Replace the placeholder name with
+  # the real group from Pipelines > Library. It must contain:
+  #   mysqlAdminUsername : mark as secret
+  #   mysqlAdminPassword : mark as secret (so Azure masks it in logs)
+  - group: epicbook-app-secrets
 
-- script: |
-    echo Add other tasks to build, test, and deploy your project.
-    echo See https://aka.ms/yaml
-  displayName: 'Run a multi-line script'
+  # Non-secret parameters.
+  - name: ansibleCoreSpec
+    value: "ansible-core>=2.16,<2.19" # Pin the major/minor range so runs are repeatable.
+  - name: ansibleInventory
+    value: "ansible/inventory/hosts.ini"
+  - name: ansiblePlaybook
+    value: "ansible/site.yml"
+
+stages:
+  # ---------------------------------------------------------------------------
+  # STAGE 1: Prepare
+  # Installs Ansible and the community.mysql collection, then checks that the SSH
+  # key Secure File can be downloaded and staged at a temp path. The key itself is
+  # not used beyond this check, and it is removed before the job ends.
+  # ---------------------------------------------------------------------------
+  - stage: Prepare
+    displayName: "Stage 1 - Prepare"
+    jobs:
+      - job: Prepare
+        displayName: "Install Ansible and stage SSH key"
+        pool:
+          vmImage: ubuntu-latest
+        steps:
+          - checkout: self
+            displayName: "Checkout repository"
+
+          # Ubuntu's system Python is "externally managed" (PEP 668), so pip cannot
+          # install into it. A venv under the agent temp dir avoids that and keeps
+          # the install out of the repo workspace.
+          - script: |
+              set -euo pipefail
+              python3 --version
+              sudo apt-get update -y
+              sudo apt-get install -y python3-venv
+              VENV="$(Agent.TempDirectory)/ansible-venv"
+              rm -rf "$VENV"
+              python3 -m venv "$VENV"
+              "$VENV/bin/pip" install --quiet --upgrade pip
+              "$VENV/bin/pip" install --quiet "$(ansibleCoreSpec)"
+              # The database role depends on community.mysql. It is installed explicitly
+              # rather than relying on a bundled copy from the full "ansible" package.
+              "$VENV/bin/ansible-galaxy" collection install community.mysql
+              # Later steps in this job find ansible-playbook on PATH.
+              echo "##vso[task.prependpath]$VENV/bin"
+              "$VENV/bin/ansible" --version
+            displayName: "Install Ansible and community.mysql"
+
+          # Secure File name must match exactly: epicbook-aws-key (no extension).
+          - task: DownloadSecureFile@1
+            name: sshKey
+            displayName: "Download SSH private key (Secure File)"
+            inputs:
+              secureFile: "epicbook-aws-key"
+
+          # Move the key out of the Secure File download directory into a fresh
+          # mktemp directory, then restrict it to 600. Later steps read the path from
+          # the SSH_KEY_PATH variable and never assume a fixed location.
+          # The key contents are never printed.
+          - script: |
+              set -euo pipefail
+              KEY_DIR="$(mktemp -d "$(Agent.TempDirectory)/ssh-key.XXXXXX")"
+              chmod 700 "$KEY_DIR"
+              mv "$(sshKey.secureFilePath)" "$KEY_DIR/epicbook-aws-key"
+              chmod 600 "$KEY_DIR/epicbook-aws-key"
+              test -s "$KEY_DIR/epicbook-aws-key"
+              echo "##vso[task.setvariable variable=SSH_KEY_PATH;issecret=true]$KEY_DIR/epicbook-aws-key"
+              echo "SSH key staged with mode $(stat -c '%a' "$KEY_DIR/epicbook-aws-key"). Contents not shown."
+            displayName: "Stage SSH key at a temp path (chmod 600)"
+
+          - script: |
+              find "$(Agent.TempDirectory)" -maxdepth 1 -name 'ssh-key.*' -exec rm -rf {} +
+            condition: always()
+            displayName: "Remove temp SSH key"
+
+  # ---------------------------------------------------------------------------
+  # STAGE 2: Validate
+  # Checks inventory syntax, playbook syntax, then real SSH connectivity to every
+  # host. The ping must succeed before Stage 3 can run.
+  # ---------------------------------------------------------------------------
+  - stage: Validate
+    displayName: "Stage 2 - Validate"
+    dependsOn: Prepare
+    jobs:
+      - job: Validate
+        displayName: "Syntax checks and SSH connectivity"
+        pool:
+          vmImage: ubuntu-latest
+        steps:
+          # Fresh agent: repo must be checked out again.
+          - checkout: self
+            displayName: "Checkout repository"
+
+          # Fresh agent: Ansible and the collection must be installed again. See the
+          # Prepare stage for why the venv is built this way.
+          - script: |
+              set -euo pipefail
+              sudo apt-get update -y
+              sudo apt-get install -y python3-venv
+              VENV="$(Agent.TempDirectory)/ansible-venv"
+              rm -rf "$VENV"
+              python3 -m venv "$VENV"
+              "$VENV/bin/pip" install --quiet --upgrade pip
+              "$VENV/bin/pip" install --quiet "$(ansibleCoreSpec)"
+              "$VENV/bin/ansible-galaxy" collection install community.mysql
+              echo "##vso[task.prependpath]$VENV/bin"
+              "$VENV/bin/ansible" --version
+            displayName: "Install Ansible and community.mysql"
+
+          # Fresh agent: the key must be downloaded and staged again.
+          - task: DownloadSecureFile@1
+            name: sshKey
+            displayName: "Download SSH private key (Secure File)"
+            inputs:
+              secureFile: "epicbook-aws-key"
+
+          - script: |
+              set -euo pipefail
+              KEY_DIR="$(mktemp -d "$(Agent.TempDirectory)/ssh-key.XXXXXX")"
+              chmod 700 "$KEY_DIR"
+              mv "$(sshKey.secureFilePath)" "$KEY_DIR/epicbook-aws-key"
+              chmod 600 "$KEY_DIR/epicbook-aws-key"
+              test -s "$KEY_DIR/epicbook-aws-key"
+              echo "##vso[task.setvariable variable=SSH_KEY_PATH;issecret=true]$KEY_DIR/epicbook-aws-key"
+              echo "SSH key staged with mode $(stat -c '%a' "$KEY_DIR/epicbook-aws-key"). Contents not shown."
+            displayName: "Stage SSH key at a temp path (chmod 600)"
+
+          # Parses the inventory only. Output goes to /dev/null because the exit code
+          # is the check. The inventory has no secrets, but there is no need to print it.
+          - script: |
+              set -euo pipefail
+              ansible-inventory -i "$(ansibleInventory)" --list > /dev/null
+              echo "Inventory parsed successfully."
+            displayName: "Validate inventory syntax (ansible-inventory --list)"
+
+          - script: |
+              set -euo pipefail
+              ansible-playbook "$(ansiblePlaybook)" -i "$(ansibleInventory)" --syntax-check
+            displayName: "Validate playbook syntax (--syntax-check)"
+
+          # Real SSH connectivity test to every host in the inventory. This is a hard
+          # gate: any unreachable or failed host fails the stage.
+          #
+          # Two details here matter:
+          # 1. hosts.ini sets ansible_ssh_private_key_file=~/.ssh/id_ed25519 in
+          #    [all:vars]. --private-key does not override inventory vars, so the
+          #    -e override below points Ansible at the temp key.
+          # 2. backend_server reaches its target through ProxyJump via bastion-host.
+          #    The jump hop uses the default SSH identity, not -i, so the key is loaded
+          #    into an ssh-agent for the duration of this step.
+          - script: |
+              set -euo pipefail
+
+              eval "$(ssh-agent -s)" > /dev/null
+              trap 'ssh-agent -k > /dev/null 2>&1 || true' EXIT
+              ssh-add "$(SSH_KEY_PATH)" 2> /dev/null || {
+                echo "##[error]ssh-add failed. Check that the key has no passphrase and is a valid private key."
+                exit 1
+              }
+
+              set +e
+              ansible -i "$(ansibleInventory)" all -m ping \
+                --private-key "$(SSH_KEY_PATH)" \
+                -e "ansible_ssh_private_key_file=$(SSH_KEY_PATH)"
+              RC=$?
+              set -e
+
+              if [ "$RC" -ne 0 ]; then
+                echo "##[error]SSH connectivity check FAILED (ansible exit code $RC). Ansible exit 4 means a host was unreachable and 2 means a host failed. Review the UNREACHABLE/FAILED lines above. backend_server is reached through bastion-host, so check both."
+                exit "$RC"
+              fi
+              echo "Every inventory host answered the ping module."
+            displayName: "SSH connectivity check (ansible all -m ping)"
+            env:
+              ANSIBLE_HOST_KEY_CHECKING: "False"
+              ANSIBLE_NOCOLOR: "1"
+
+          - script: |
+              find "$(Agent.TempDirectory)" -maxdepth 1 -name 'ssh-key.*' -exec rm -rf {} +
+            condition: always()
+            displayName: "Remove temp SSH key"
+
+  # ---------------------------------------------------------------------------
+  # STAGE 3: Configure and Deploy
+  # Runs site.yml: common, frontend, backend, database and the verification play.
+  # The MySQL admin credentials are passed to Ansible through a JSON extra-vars
+  # file. This keeps them off the command line and out of the logs.
+  # ---------------------------------------------------------------------------
+  - stage: ConfigureAndDeploy
+    displayName: "Stage 3 - Configure and Deploy"
+    dependsOn: Validate
+    jobs:
+      - job: ConfigureAndDeploy
+        displayName: "Run site.yml"
+        timeoutInMinutes: 60
+        pool:
+          vmImage: ubuntu-latest
+        steps:
+          # Fresh agent: repo must be checked out again.
+          - checkout: self
+            displayName: "Checkout repository"
+
+          # Fresh agent: Ansible and the collection must be installed again.
+          - script: |
+              set -euo pipefail
+              sudo apt-get update -y
+              sudo apt-get install -y python3-venv
+              VENV="$(Agent.TempDirectory)/ansible-venv"
+              rm -rf "$VENV"
+              python3 -m venv "$VENV"
+              "$VENV/bin/pip" install --quiet --upgrade pip
+              "$VENV/bin/pip" install --quiet "$(ansibleCoreSpec)"
+              "$VENV/bin/ansible-galaxy" collection install community.mysql
+              echo "##vso[task.prependpath]$VENV/bin"
+              "$VENV/bin/ansible-playbook" --version
+            displayName: "Install Ansible and community.mysql"
+
+          # Fresh agent: the key must be downloaded and staged again.
+          - task: DownloadSecureFile@1
+            name: sshKey
+            displayName: "Download SSH private key (Secure File)"
+            inputs:
+              secureFile: "epicbook-aws-key"
+
+          - script: |
+              set -euo pipefail
+              KEY_DIR="$(mktemp -d "$(Agent.TempDirectory)/ssh-key.XXXXXX")"
+              chmod 700 "$KEY_DIR"
+              mv "$(sshKey.secureFilePath)" "$KEY_DIR/epicbook-aws-key"
+              chmod 600 "$KEY_DIR/epicbook-aws-key"
+              test -s "$KEY_DIR/epicbook-aws-key"
+              echo "##vso[task.setvariable variable=SSH_KEY_PATH;issecret=true]$KEY_DIR/epicbook-aws-key"
+              echo "SSH key staged with mode $(stat -c '%a' "$KEY_DIR/epicbook-aws-key"). Contents not shown."
+            displayName: "Stage SSH key at a temp path (chmod 600)"
+
+          # Runs the playbook and keeps only the PLAY RECAP lines for Stage 4.
+          # Those lines contain host names and task counts, with no secrets.
+          #
+          # Secret handling:
+          # - The secrets reach this step only through the env: block below. Azure
+          #   masks them in logs because they are secret variables in the group.
+          # - The Python heredoc reads them from os.environ and writes a JSON
+          #   extra-vars file (mktemp, mode 600). That file is passed to Ansible
+          #   with -e @file, so the password is never on a command line.
+          # - The file is deleted by the EXIT trap. Extra vars are never printed.
+          - script: |
+              set -euo pipefail
+
+              : "${DB_ADMIN_USERNAME:?mysqlAdminUsername is not set. Check the variable group.}"
+              : "${DB_ADMIN_PASSWORD:?mysqlAdminPassword is not set. Check the variable group.}"
+
+              RECAP_FILE="$(Agent.TempDirectory)/play-recap.txt"
+              PLAY_LOG="$(Agent.TempDirectory)/site-run.log"
+              EXTRA_VARS_FILE="$(mktemp "$(Agent.TempDirectory)/extra-vars.XXXXXX.json")"
+
+              # Clean up on every exit path. Stop the ssh-agent and remove the secret
+              # file and the run log. The recap file is kept for the publish step.
+              trap 'rm -f "$EXTRA_VARS_FILE" "$PLAY_LOG"; ssh-agent -k > /dev/null 2>&1 || true' EXIT
+
+              # Create the recap file up front so the publish step always has a file.
+              touch "$RECAP_FILE"
+
+              python3 -I - "$EXTRA_VARS_FILE" <<'PY'
+              import json, os, sys
+              payload = {
+                  "db_admin_username": os.environ["DB_ADMIN_USERNAME"],
+                  "db_admin_password": os.environ["DB_ADMIN_PASSWORD"],
+              }
+              with open(sys.argv[1], "w", encoding="utf-8") as fh:
+                  json.dump(payload, fh)
+              PY
+
+              # Load the key into an ssh-agent so the ProxyJump hop through
+              # bastion-host can authenticate. See the Validate stage for details.
+              eval "$(ssh-agent -s)" > /dev/null
+              ssh-add "$(SSH_KEY_PATH)" 2> /dev/null || {
+                echo "##[error]ssh-add failed. Check that the key has no passphrase and is a valid private key."
+                exit 1
+              }
+
+              # Run the full playbook. tee streams it to the job log and to a file.
+              # PIPESTATUS keeps the real ansible-playbook exit code. Only the
+              # ansible-playbook exit code matters, and it is re-raised below.
+              set +e
+              ansible-playbook "$(ansiblePlaybook)" -i "$(ansibleInventory)" \
+                --private-key "$(SSH_KEY_PATH)" \
+                -e "ansible_ssh_private_key_file=$(SSH_KEY_PATH)" \
+                -e "@$EXTRA_VARS_FILE" 2>&1 | tee "$PLAY_LOG"
+              RC=${PIPESTATUS[0]}
+              set -e
+
+              # Keep only the PLAY RECAP host lines. Each has the form
+              # "<host> : ok=N changed=N unreachable=N failed=N ...".
+              grep -E '^[^[:space:]]+[[:space:]]*:[[:space:]]+ok=' "$PLAY_LOG" > "$RECAP_FILE" || true
+
+              if [ ! -s "$RECAP_FILE" ]; then
+                echo "##[error]No PLAY RECAP lines were captured. See the playbook output above."
+                exit 1
+              fi
+
+              echo "site.yml finished with exit code $RC. PLAY RECAP saved for the Verify stage."
+              exit "$RC"
+            displayName: "Run site.yml (configure and deploy)"
+            env:
+              DB_ADMIN_USERNAME: $(mysqlAdminUsername)
+              DB_ADMIN_PASSWORD: $(mysqlAdminPassword)
+              ANSIBLE_HOST_KEY_CHECKING: "False"
+              ANSIBLE_NOCOLOR: "1"
+
+          # Runs even if the playbook failed, so a failed run still leaves a recap for
+          # debugging. Stage 4 only runs when this stage succeeds.
+          - task: PublishPipelineArtifact@1
+            condition: always()
+            displayName: "Publish PLAY RECAP artifact"
+            inputs:
+              targetPath: "$(Agent.TempDirectory)/play-recap.txt"
+              artifact: "play-recap"
+              publishLocation: "pipeline"
+
+          - script: |
+              find "$(Agent.TempDirectory)" -maxdepth 1 -name 'ssh-key.*' -exec rm -rf {} +
+            condition: always()
+            displayName: "Remove temp SSH key"
+
+  # ---------------------------------------------------------------------------
+  # STAGE 4: Verify
+  # Does not re-run anything against the hosts. It reads the PLAY RECAP artifact
+  # from Stage 3 and checks that every inventory host appears, with 0 failed and
+  # 0 unreachable. It then prints a non-sensitive summary and the frontend URL.
+  # ---------------------------------------------------------------------------
+  - stage: Verify
+    displayName: "Stage 4 - Verify"
+    dependsOn: ConfigureAndDeploy
+    jobs:
+      - job: Verify
+        displayName: "Confirm play recap and summarize"
+        pool:
+          vmImage: ubuntu-latest
+        steps:
+          # Needed to read the inventory (host list and frontend IP). Nothing from the
+          # repo is executed.
+          - checkout: self
+            displayName: "Checkout repository"
+
+          - download: current
+            artifact: "play-recap"
+            displayName: "Download PLAY RECAP artifact from Stage 3"
+
+          # Parses the recap and the inventory with python3 in isolated mode (-I).
+          # Nothing is printed except host names, task counts and the frontend URL.
+          - script: |
+              set -euo pipefail
+              python3 -I - "$(Pipeline.Workspace)/play-recap/play-recap.txt" "$(Build.SourcesDirectory)/$(ansibleInventory)" <<'PY'
+              import re
+              import sys
+
+              recap_path, inventory_path = sys.argv[1], sys.argv[2]
+
+
+              def fail(msg):
+                  print(f"##[error]{msg}")
+                  sys.exit(1)
+
+
+              # Expected hosts: every host in a non-vars inventory group. Also find the
+              # frontend's public address for the browser check.
+              expected, frontend_ip, section = [], None, None
+              with open(inventory_path, encoding="utf-8") as fh:
+                  for raw in fh:
+                      line = raw.strip()
+                      if not line or line.startswith("#"):
+                          continue
+                      if line.startswith("["):
+                          section = line.strip("[]")
+                          continue
+                      if section is None or section.endswith(":vars"):
+                          continue
+                      expected.append(line.split()[0])
+                      if section == "frontend":
+                          m = re.search(r"ansible_host=(\S+)", line)
+                          if m:
+                              frontend_ip = m.group(1)
+
+              # Parse the PLAY RECAP lines saved by Stage 3.
+              recap = {}
+              with open(recap_path, encoding="utf-8") as fh:
+                  for raw in fh:
+                      m = re.match(r"^(\S+)\s*:\s*(.*)$", raw.strip())
+                      if not m:
+                          continue
+                      stats = {k: int(v) for k, v in re.findall(r"(\w+)=(\d+)", m.group(2))}
+                      if "failed" in stats and "unreachable" in stats:
+                          recap[m.group(1)] = stats
+
+              if not recap:
+                  fail("No PLAY RECAP host lines found in the artifact. Stage 3 may not have run the playbook.")
+
+              missing = [h for h in expected if h not in recap]
+              if missing:
+                  fail("Inventory hosts missing from PLAY RECAP: " + ", ".join(missing))
+
+              bad = [h for h, s in recap.items() if s.get("failed", 0) or s.get("unreachable", 0)]
+              if bad:
+                  fail("Hosts with failed or unreachable results: " + ", ".join(bad))
+
+              print("Hosts touched by site.yml (from PLAY RECAP):")
+              for h in expected:
+                  s = recap[h]
+                  print(f"  {h}: ok={s.get('ok', 0)} changed={s.get('changed', 0)} "
+                        f"failed={s.get('failed', 0)} unreachable={s.get('unreachable', 0)}")
+
+              print(f"PLAY RECAP check passed: {len(expected)} of {len(expected)} hosts, 0 failed, 0 unreachable.")
+              print("The playbook's own verification play (service, port, DB row counts, Nginx HTTP 200) ran in Stage 3.")
+              if frontend_ip:
+                  print(f"Manual browser check: http://{frontend_ip}/")
+              else:
+                  print("##[warning]Could not find the frontend ansible_host in the inventory. Check the URL by hand.")
+              PY
+            displayName: "Confirm PLAY RECAP (0 failed, 0 unreachable) and summarize"
