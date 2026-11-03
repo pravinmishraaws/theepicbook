@@ -19,14 +19,14 @@
         name: epicbook
       register: epicbook_status
       failed_when: epicbook_status.status.ActiveState != "active"
-      *Verification:* Ensures the Node.js backend service is running under systemd.
+      #*Verification:* Ensures the Node.js backend service is running under systemd.
 
     - name: Confirm backend port is listening
       ansible.builtin.wait_for:
         host: 127.0.0.1
         port: "{{ backend_app_port }}"
         timeout: 10
-      *Verification:* Validates that port 3000 is open and bound locally.
+      #*Verification:* Validates that port 3000 is open and bound locally.
 
     - name: Confirm required tables exist and are populated
       community.mysql.mysql_query:
@@ -37,7 +37,7 @@
         query: "SELECT COUNT(*) AS row_count FROM Author"
       register: verify_author_count
       no_log: true
-      *Verification:* Queries AWS RDS to check that the Author table has seed rows.
+      #*Verification:* Queries AWS RDS to check that the Author table has seed rows.
 
     - name: Fail if Author table is empty
       ansible.builtin.fail:
@@ -53,7 +53,7 @@
         query: "SELECT COUNT(*) AS row_count FROM Book"
       register: verify_book_count
       no_log: true
-      *Verification:* Queries AWS RDS to check that the Book table has seed rows.
+      #*Verification:* Queries AWS RDS to check that the Book table has seed rows.
 
     - name: Fail if Book table is empty
       ansible.builtin.fail:
@@ -65,12 +65,12 @@
         name: nginx
       register: nginx_status
       failed_when: nginx_status.status.ActiveState != "active"
-      *Verification:* Confirms the Nginx reverse proxy service is running.
+      #*Verification:* Confirms the Nginx reverse proxy service is running.
 
     - name: Confirm Nginx configuration is valid
       ansible.builtin.command: nginx -t
       changed_when: false
-      *Verification:* Runs the Nginx syntax check command without errors.
+      #*Verification:* Runs the Nginx syntax check command without errors.
 
     - name: Request the frontend HTTP endpoint
       ansible.builtin.uri:
@@ -78,7 +78,7 @@
         status_code: 200
         timeout: 10
       register: frontend_response
-      *Verification:* Sends an HTTP GET request to local Nginx to confirm it responds with status 200.
+      #*Verification:* Sends an HTTP GET request to local Nginx to confirm it responds with status 200.
 
     - name: Report verification success
       ansible.builtin.debug:
