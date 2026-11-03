@@ -38,9 +38,13 @@
     src: "{{ playbook_dir }}/../"
     dest: /opt/epicbook/
     archive: true
-    use_ssh_args: true
     compress: true
     rsync_opts:
+      # use_ssh_args does not work here. The task is delegated to localhost, so the
+      # connection is "local" and synchronize drops the host's ProxyJump options.
+      # Pass our own --rsh so rsync uses the key and reaches the private IP through the
+      # bastion. The ssh_common_args default is empty for hosts without a jump.
+      - "--rsh=ssh -i {{ ansible_ssh_private_key_file }} {{ ansible_ssh_common_args | default('') }} -o StrictHostKeyChecking=accept-new"
       - "--exclude=.git"
       - "--exclude=ansible"
       - "--exclude=node_modules"
