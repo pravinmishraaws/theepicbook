@@ -184,6 +184,11 @@ stages:
 
           - script: |
               set -euo pipefail
+              # Diagnostic: which ansible-playbook runs, and whether the collections
+              # from requirements.yml are visible to it.
+              echo "ansible-playbook: $(command -v ansible-playbook)"
+              ansible-config dump | grep COLLECTIONS_PATHS || true
+              ansible-galaxy collection list || true
               ansible-playbook "$(ansiblePlaybook)" -i "$(ansibleInventory)" --syntax-check
             displayName: "Validate playbook syntax (--syntax-check)"
 
