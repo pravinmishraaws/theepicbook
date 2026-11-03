@@ -37,10 +37,13 @@
   ansible.posix.synchronize:
     src: "{{ playbook_dir }}/../"
     dest: /opt/epicbook/
+    archive: true
+    compress: true
     rsync_opts:
       - "--exclude=.git"
       - "--exclude=ansible"
       - "--exclude=node_modules"
+  delegate_to: localhost
 
 - name: Install Node.js dependencies
   ansible.builtin.command: npm ci --production

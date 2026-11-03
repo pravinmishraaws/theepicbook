@@ -1,9 +1,10 @@
 ---
 - name: Confirm backend can reach MySQL FQDN on port 3306
   ansible.builtin.wait_for:
-    host: "{{ mysql_fqdn }}"
+    host: epicbook-db.cghoeoyw2bg6.us-east-1.rds.amazonaws.com
     port: 3306
-    timeout: 10
+    timeout: 30
+  delegate_to: backend_server
 
 - name: Create the application database if it does not exist
   ansible.mysql.mysql_db:

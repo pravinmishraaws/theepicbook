@@ -1,4 +1,0 @@
----
-collections:
-  - name: ansible.posix
-  - name: ansible.mysql
