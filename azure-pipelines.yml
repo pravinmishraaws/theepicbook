@@ -95,7 +95,7 @@ stages:
               "$VENV/bin/ansible" --version
             displayName: "Install Ansible and community.mysql"
 
-          # Secure File name must match exactly: epicbook-aws-key (no extension).
+          # Secure File name must match exactly: id_ed25519 (no extension).
           - task: DownloadSecureFile@1
             name: sshKey
             displayName: "Download SSH private key (Secure File)"
@@ -110,11 +110,11 @@ stages:
               set -euo pipefail
               KEY_DIR="$(mktemp -d "$(Agent.TempDirectory)/ssh-key.XXXXXX")"
               chmod 700 "$KEY_DIR"
-              mv "$(sshKey.secureFilePath)" "$KEY_DIR/epicbook-aws-key"
-              chmod 600 "$KEY_DIR/epicbook-aws-key"
-              test -s "$KEY_DIR/epicbook-aws-key"
-              echo "##vso[task.setvariable variable=SSH_KEY_PATH;issecret=true]$KEY_DIR/epicbook-aws-key"
-              echo "SSH key staged with mode $(stat -c '%a' "$KEY_DIR/epicbook-aws-key"). Contents not shown."
+              mv "$(sshKey.secureFilePath)" "$KEY_DIR/id_ed25519"
+              chmod 600 "$KEY_DIR/id_ed25519"
+              test -s "$KEY_DIR/id_ed25519"
+              echo "##vso[task.setvariable variable=SSH_KEY_PATH;issecret=true]$KEY_DIR/id_ed25519"
+              echo "SSH key staged with mode $(stat -c '%a' "$KEY_DIR/id_ed25519"). Contents not shown."
             displayName: "Stage SSH key at a temp path (chmod 600)"
 
           - script: |
@@ -167,11 +167,11 @@ stages:
               set -euo pipefail
               KEY_DIR="$(mktemp -d "$(Agent.TempDirectory)/ssh-key.XXXXXX")"
               chmod 700 "$KEY_DIR"
-              mv "$(sshKey.secureFilePath)" "$KEY_DIR/epicbook-aws-key"
-              chmod 600 "$KEY_DIR/epicbook-aws-key"
-              test -s "$KEY_DIR/epicbook-aws-key"
-              echo "##vso[task.setvariable variable=SSH_KEY_PATH;issecret=true]$KEY_DIR/epicbook-aws-key"
-              echo "SSH key staged with mode $(stat -c '%a' "$KEY_DIR/epicbook-aws-key"). Contents not shown."
+              mv "$(sshKey.secureFilePath)" "$KEY_DIR/id_ed25519"
+              chmod 600 "$KEY_DIR/id_ed25519"
+              test -s "$KEY_DIR/id_ed25519"
+              echo "##vso[task.setvariable variable=SSH_KEY_PATH;issecret=true]$KEY_DIR/id_ed25519"
+              echo "SSH key staged with mode $(stat -c '%a' "$KEY_DIR/id_ed25519"). Contents not shown."
             displayName: "Stage SSH key at a temp path (chmod 600)"
 
           # Parses the inventory only. Output goes to /dev/null because the exit code
@@ -269,17 +269,17 @@ stages:
             name: sshKey
             displayName: "Download SSH private key (Secure File)"
             inputs:
-              secureFile: "epicbook-aws-key"
+              secureFile: "id_ed25519"
 
           - script: |
               set -euo pipefail
               KEY_DIR="$(mktemp -d "$(Agent.TempDirectory)/ssh-key.XXXXXX")"
               chmod 700 "$KEY_DIR"
-              mv "$(sshKey.secureFilePath)" "$KEY_DIR/epicbook-aws-key"
-              chmod 600 "$KEY_DIR/epicbook-aws-key"
-              test -s "$KEY_DIR/epicbook-aws-key"
-              echo "##vso[task.setvariable variable=SSH_KEY_PATH;issecret=true]$KEY_DIR/epicbook-aws-key"
-              echo "SSH key staged with mode $(stat -c '%a' "$KEY_DIR/epicbook-aws-key"). Contents not shown."
+              mv "$(sshKey.secureFilePath)" "$KEY_DIR/id_ed25519"
+              chmod 600 "$KEY_DIR/id_ed25519"
+              test -s "$KEY_DIR/id_ed25519"
+              echo "##vso[task.setvariable variable=SSH_KEY_PATH;issecret=true]$KEY_DIR/id_ed25519"
+              echo "SSH key staged with mode $(stat -c '%a' "$KEY_DIR/id_ed25519"). Contents not shown."
             displayName: "Stage SSH key at a temp path (chmod 600)"
 
           # Runs the playbook and keeps only the PLAY RECAP lines for Stage 4.
