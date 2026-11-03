@@ -161,7 +161,7 @@ stages:
             name: sshKey
             displayName: "Download SSH private key (Secure File)"
             inputs:
-              secureFile: "epicbook-aws-key"
+              secureFile: "id_ed25519"
 
           - script: |
               set -euo pipefail
