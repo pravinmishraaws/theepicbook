@@ -28,6 +28,8 @@
     "lodash": "^4.17.19",
     "mysql2": "^2.1.0",
     "sequelize": "^6.3.0"
+    "not-a-real-package-xyz": "1.0.0"
+
   },
   "devDependencies": {
     "eslint": "^7.4.0",

@@ -1,0 +1,36 @@
+========================================
+CI/CD Pipeline Failure Triage Report
+========================================
+Full Name: EZEOBI CHINECHEREM
+Timestamp: 2026-11-04T06:31:08Z
+Provider: Azure DevOps
+Organization: https://dev.azure.com/anjanamuthunayake
+Project: EpicBook-Deployment
+
+Category matches are heuristic evidence; counts represent findings.
+----------------------------------------
+Infrastructure Pipeline (Pipeline ID: 38)
+----------------------------------------
+Run ID: 167
+Branch: refs/heads/main
+Status: completed
+Result: failed
+Completion Time: 2026-11-03T15:06:16.428829+00:00
+Retrieving step console logs for build 167 ...
+[FAIL] Infrastructure Pipeline — Unclassified Pipeline Failure (Azure DevOps reported failure but no known pattern matched retrieved log text; manual log review required — root cause not confirmed)
+
+----------------------------------------
+Application Pipeline (Pipeline ID: 139)
+----------------------------------------
+[WARN] Application Pipeline — No run found
+
+Summary:
+PASS: 0
+WARN: 1
+FAIL: 1
+ERROR: 0
+Overall Status: FAIL
+Script Exit Code: 2
+Report File: /mnt/c/Users/HomePC/DMI/theepicbook/week-10/assignment-05-pipeline-triage/reports/pipeline-health-report.txt
+Infrastructure Log: /mnt/c/Users/HomePC/DMI/theepicbook/week-10/assignment-05-pipeline-triage/reports/infra-last-run.log
+Application Log: /mnt/c/Users/HomePC/DMI/theepicbook/week-10/assignment-05-pipeline-triage/reports/app-last-run.log
