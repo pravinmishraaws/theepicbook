@@ -338,11 +338,11 @@ stages:
           - script: |
               sudo apt-get update
               sudo apt-get install -y rsync
-            displayName: 'Install rsync'
+            displayName: "Install rsync"
 
           - script: |
               ansible-galaxy collection install -r ansible/requirements.yml
-            displayName: 'Install Ansible collections'
+            displayName: "Install Ansible collections"
 
           # Same host-key pinning as the Validate stage. This job is a fresh agent, so
           # the known_hosts entries from Validate do not exist here.
