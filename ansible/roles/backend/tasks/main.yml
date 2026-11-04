@@ -44,11 +44,17 @@
       # connection is "local" and synchronize drops the host's ProxyJump options.
       # Pass our own --rsh so rsync uses the key and reaches the private IP through the
       # bastion. The ssh_common_args default is empty for hosts without a jump.
-      - "--rsh=ssh -i {{ ansible_ssh_private_key_file }} {{ ansible_ssh_common_args | default('') }} -o StrictHostKeyChecking=accept-new"
+      # StrictHostKeyChecking and UserKnownHostsFile come from ansible_ssh_common_args.
+      # ConnectTimeout and ServerAliveInterval stop a stalled bastion hop from hanging.
+      - "--rsh=ssh -i {{ ansible_ssh_private_key_file }} {{ ansible_ssh_common_args | default('') }} -o ConnectTimeout=30 -o ServerAliveInterval=15"
       - "--exclude=.git"
       - "--exclude=ansible"
       - "--exclude=node_modules"
   delegate_to: localhost
+  register: sync_result
+  until: sync_result is succeeded
+  retries: 3
+  delay: 20
 
 - name: Install Node.js dependencies
   ansible.builtin.command: npm ci --production
