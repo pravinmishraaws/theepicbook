@@ -316,6 +316,26 @@ stages:
             displayName: "Stage SSH key at a temp path (chmod 600)"
 
           - script: |
+              echo "Agent user:"
+              whoami
+
+              echo "Agent home:"
+              echo "$HOME"
+
+              echo "SSH key:"
+              ls -l /home/ubuntu/.ssh/id_ed25519
+
+              echo "Bastion connectivity:"
+              nc -zv -w 5 184.195.165.141 22
+
+              echo "Backend connectivity through bastion:"
+              ssh -i /home/ubuntu/.ssh/id_ed25519 \
+                -o IdentitiesOnly=yes \
+                -o "ProxyCommand=ssh -i /home/ubuntu/.ssh/id_ed25519 -o IdentitiesOnly=yes -W %h:%p ubuntu@184.195.165.141" \
+                ubuntu@10.20.2.133 "hostname"
+            displayName: "Verify SSH connectivity"
+
+          - script: |
               sudo apt-get update
               sudo apt-get install -y rsync
             displayName: 'Install rsync'
