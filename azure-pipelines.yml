@@ -205,8 +205,8 @@ stages:
               SSH_OPTS=(-i "$(SSH_KEY_PATH)" -o StrictHostKeyChecking=accept-new -o BatchMode=yes -o ConnectTimeout=20)
               INV="$(ansibleInventory)"
 
-              BASTION_IP="$(awk '$1 == "bastion-host" { for (i = 1; i <= NF; i++) if ($i ~ /^ansible_host=/) { sub(/^ansible_host=/, "", $i); print $i } }' "$INV")"
-              [ -n "$BASTION_IP" ] || { echo "##[error]bastion-host ansible_host not found in inventory."; exit 1; }
+              BASTION_IP="$(awk '$1 == "bastion_host" { for (i = 1; i <= NF; i++) if ($i ~ /^ansible_host=/) { sub(/^ansible_host=/, "", $i); print $i } }' "$INV")"
+              [ -n "$BASTION_IP" ] || { echo "##[error]bastion_host ansible_host not found in inventory."; exit 1; }
               ssh "${SSH_OPTS[@]}" "ubuntu@$BASTION_IP" true
 
               while read -r name ip; do
@@ -352,8 +352,8 @@ stages:
               SSH_OPTS=(-i "$(SSH_KEY_PATH)" -o StrictHostKeyChecking=accept-new -o BatchMode=yes -o ConnectTimeout=20)
               INV="$(ansibleInventory)"
 
-              BASTION_IP="$(awk '$1 == "bastion-host" { for (i = 1; i <= NF; i++) if ($i ~ /^ansible_host=/) { sub(/^ansible_host=/, "", $i); print $i } }' "$INV")"
-              [ -n "$BASTION_IP" ] || { echo "##[error]bastion-host ansible_host not found in inventory."; exit 1; }
+              BASTION_IP="$(awk '$1 == "bastion_host" { for (i = 1; i <= NF; i++) if ($i ~ /^ansible_host=/) { sub(/^ansible_host=/, "", $i); print $i } }' "$INV")"
+              [ -n "$BASTION_IP" ] || { echo "##[error]bastion_host ansible_host not found in inventory."; exit 1; }
               ssh "${SSH_OPTS[@]}" "ubuntu@$BASTION_IP" true
 
               while read -r name ip; do
