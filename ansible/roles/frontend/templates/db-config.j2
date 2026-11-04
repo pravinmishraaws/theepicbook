@@ -1,0 +1,23 @@
+{
+  "development": {
+    "username": "root",
+    "password": "demo1234",
+    "database": "{{ db_name }}",
+    "host": "127.0.0.1",
+    "dialect": "mysql"
+  },
+  "test": {
+    "username": "root",
+    "password": null,
+    "database": "database_test",
+    "host": "127.0.0.1",
+    "dialect": "mysql"
+  },
+  "production": {
+    "username": "{{ db_admin_username }}",
+    "password": "{{ db_admin_password }}",
+    "database": "{{ db_name }}",
+    "host": "{{ mysql_fqdn }}",
+    "dialect": "mysql"
+  }
+}

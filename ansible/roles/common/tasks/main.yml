@@ -1,0 +1,17 @@
+---
+- name: Update apt package cache
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Install common packages
+  ansible.builtin.apt:
+    name:
+      - git
+      - curl
+    state: present
+
+- name: Install PyMySQL for Ansible MySQL modules
+  ansible.builtin.apt:
+    name: python3-pymysql
+    state: present

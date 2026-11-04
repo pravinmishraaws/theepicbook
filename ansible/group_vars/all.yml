@@ -1,0 +1,6 @@
+# Application settings
+backend_app_port: 3000
+
+# Database settings (credentials come from the pipeline, never this file)
+db_name: "bookstore"
+mysql_fqdn: "epicbook-mysql.c3a8w2cyyvvp.us-west-1.rds.amazonaws.com"

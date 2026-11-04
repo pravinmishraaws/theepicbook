@@ -1,0 +1,16 @@
+[Unit]
+Description=EpicBook Node.js Application
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/opt/epicbook
+Environment=NODE_ENV=production
+Environment=PORT={{ backend_app_port }}
+ExecStart=/usr/bin/node server.js
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

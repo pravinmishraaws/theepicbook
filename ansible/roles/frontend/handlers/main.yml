@@ -1,0 +1,11 @@
+---
+- name: Reload nginx
+  ansible.builtin.systemd:
+    name: nginx
+    state: reloaded
+
+- name: Restart epicbook
+  ansible.builtin.systemd:
+    name: epicbook
+    state: restarted
+    daemon_reload: true
